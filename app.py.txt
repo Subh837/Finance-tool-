@@ -1,0 +1,158 @@
+import streamlit as st
+import pandas as pd
+import json
+import sqlite3
+from datetime import datetime
+import plotly.express as px
+import plotly.graph_objects as go
+import os
+
+st.set_page_config(page_title="📊 Finance Tool Pro", layout="wide")
+
+if not os.path.exists('config.json'):
+    config = {
+        "company_name": "Meri Company",
+        "financial_year": "2025-26",
+        "depreciation": {"method": "WDV", "half_year_concept": True, "rates": {"Building": 10, "Plant": 15, "Furniture": 10, "Computer": 40, "Vehicle": 15}},
+        "income_tax": {"regime": "new", "slab_rates": {"new": {"0-300000": 0, "300001-600000": 5, "600001-900000": 10, "900001-1200000": 15, "1200001-1500000": 20, "above_1500000": 30}, "old": {"0-250000": 0, "250001-500000": 5, "500001-1000000": 20, "above_1000000": 30}}}
+    }
+    with open('config.json', 'w') as f:
+        json.dump(config, f, indent=2)
+
+conn = sqlite3.connect('finance.db')
+c = conn.cursor()
+c.execute('''CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, type TEXT, party TEXT, category TEXT, amount REAL, mode TEXT, ref TEXT, desc TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS assets (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, cost REAL, opening_wdv REAL, rate REAL, depreciation REAL, closing_wdv REAL, fy TEXT)''')
+conn.commit()
+
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+with st.sidebar:
+    st.title("📊 Finance Tool")
+    page = st.radio("Menu", ["🏠 Dashboard", "📒 Balance Sheet", "📈 P&L", "📉 Depreciation", "📊 CMA Data", "📋 Project Report", "💵 Income/Exp", "💳 Payment/Receipt", "⚙️ Settings"])
+
+if page == "🏠 Dashboard":
+    st.title("🏠 Dashboard")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("💰 Total Assets", "₹25,00,000", "↑ 5.2%")
+    col2.metric("📈 Revenue", "₹12,00,000", "↑ 8.1%")
+    col3.metric("📊 Net Profit", "₹1,80,000", "↑ 12.3%")
+    col4.metric("🏦 Bank Balance", "₹5,00,000", "↓ 2.1%")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        data = pd.DataFrame({'Month': ['Apr','May','Jun','Jul','Aug','Sep'], 'Revenue': [100000,120000,110000,130000,140000,150000], 'Expenses': [80000,90000,85000,95000,100000,105000]})
+        st.plotly_chart(px.line(data, x='Month', y=['Revenue','Expenses']), use_container_width=True)
+    with col2:
+        st.plotly_chart(px.bar(x=['Current','Quick','D/E','ROCE'], y=[2.4,1.6,1.8,18.5]), use_container_width=True)
+
+elif page == "📒 Balance Sheet":
+    st.title("📒 Balance Sheet")
+    col1, col2 = st.columns(2)
+    with col1:
+        cash = st.number_input("Cash", 100000)
+        bank = st.number_input("Bank", 500000)
+        debtors = st.number_input("Debtors", 200000)
+        inventory = st.number_input("Inventory", 300000)
+        fixed = st.number_input("Fixed Assets", 1000000)
+        total_a = cash + bank + debtors + inventory + fixed
+    with col2:
+        creditors = st.number_input("Creditors", 150000)
+        loans = st.number_input("Loans", 500000)
+        capital = st.number_input("Capital", 1000000)
+        reserves = st.number_input("Reserves", 200000)
+        total_l = creditors + loans + capital + reserves
+    
+    if st.button("Generate"):
+        st.metric("Total Assets", f"₹{total_a:,.2f}")
+        st.metric("Total Liabilities", f"₹{total_l:,.2f}")
+        st.metric("Difference", f"₹{total_a-total_l:,.2f}")
+
+elif page == "📈 P&L":
+    st.title("📈 P&L Statement")
+    col1, col2 = st.columns(2)
+    with col1:
+        revenue = st.number_input("Revenue", 1200000)
+        other = st.number_input("Other Income", 50000)
+    with col2:
+        cogs = st.number_input("COGS", 700000)
+        salaries = st.number_input("Salaries", 200000)
+        rent = st.number_input("Rent", 50000)
+        interest = st.number_input("Interest", 30000)
+        dep = st.number_input("Depreciation", 20000)
+    
+    if st.button("Generate P&L"):
+        total_i = revenue + other
+        total_e = cogs + salaries + rent + interest + dep
+        net = total_i - total_e
+        st.metric("Net Profit", f"₹{net:,.2f}")
+
+elif page == "📉 Depreciation":
+    st.title("📉 Depreciation")
+    name = st.selectbox("Asset", ["Building", "Plant", "Furniture", "Computer", "Vehicle"])
+    cost = st.number_input("Cost", 100000)
+    wdv = st.number_input("Opening WDV", 80000)
+    if st.button("Calculate"):
+        rate = config['depreciation']['rates'].get(name, 15)/100
+        dep = wdv * rate
+        st.success(f"Depreciation: ₹{dep:,.2f} | Closing WDV: ₹{wdv-dep:,.2f}")
+
+elif page == "📊 CMA Data":
+    st.title("📊 CMA Data")
+    ca = st.number_input("Current Assets", 500000)
+    cl = st.number_input("Current Liabilities", 300000)
+    if st.button("Calculate MPBF"):
+        wc = ca - cl
+        mpbf = wc * 0.75
+        st.metric("Working Capital", f"₹{wc:,.2f}")
+        st.metric("MPBF (75%)", f"₹{mpbf:,.2f}")
+
+elif page == "📋 Project Report":
+    st.title("📋 Project Report")
+    cost = st.number_input("Project Cost", 5000000)
+    own = st.number_input("Own Funds", 1500000)
+    tenure = st.number_input("Tenure (Years)", 5)
+    rate = st.number_input("Interest Rate %", 10.0)
+    if st.button("Calculate EMI"):
+        loan = cost - own
+        r = rate/12/100
+        emi = loan * r * ((1+r)**(tenure*12)) / (((1+r)**(tenure*12))-1)
+        st.metric("Monthly EMI", f"₹{emi:,.2f}")
+
+elif page == "💵 Income/Exp":
+    st.title("💵 Income & Expenditure")
+    col1, col2 = st.columns(2)
+    with col1:
+        i1 = st.number_input("Sales", 1000000)
+        i2 = st.number_input("Service", 200000)
+    with col2:
+        e1 = st.number_input("Salaries", 300000)
+        e2 = st.number_input("Rent", 100000)
+    if st.button("Calculate"):
+        total_i = i1+i2
+        total_e = e1+e2
+        st.metric("Surplus", f"₹{total_i-total_e:,.2f}")
+
+elif page == "💳 Payment/Receipt":
+    st.title("💳 Payment/Receipt")
+    tab1, tab2 = st.tabs(["Add", "Register"])
+    with tab1:
+        txn_type = st.radio("Type", ["Receipt", "Payment"])
+        party = st.text_input("Party")
+        amount = st.number_input("Amount", 1000)
+        if st.button("Save"):
+            c.execute("INSERT INTO transactions (date,type,party,amount) VALUES (?,?,?,?)", (datetime.now().strftime('%Y-%m-%d'), txn_type, party, amount))
+            conn.commit()
+            st.success("✅ Saved!")
+    with tab2:
+        df = pd.read_sql_query("SELECT * FROM transactions", conn)
+        st.dataframe(df)
+
+elif page == "⚙️ Settings":
+    st.title("⚙️ Settings")
+    config['company_name'] = st.text_input("Company Name", config['company_name'])
+    if st.button("Save"):
+        with open('config.json', 'w') as f:
+            json.dump(config, f, indent=2)
+        st.success("✅ Saved!")
